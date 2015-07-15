@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<!--
+To change this license header, choose License Headers in Project Properties.
+To change this template file, choose Tools | Templates
+and open the template in the editor.
+-->
+<html>
+	<head>
+		<title>160 Final Project</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+		<script src="three/three.min.js"></script>
+		<script src="three/MTLLoader.js"></script>
+		<script src="three/OBJMTLLoader.js"></script>
+		<script>
+			
+			var scene, camera, renderer; 
+			
+			var ambient, directionalLight;
+			
+			var manager, loader; 
+			
+			var bgMesh, bgTexture, bgScene, bgCamera; 
+			var hasCuckooed = false;
+			
+			
+		    //clock_group refers to all objects that make up the cuckoo clock
+			//after being loaded each one is added to the list. 
+			var mouse = {x:0, y:0}
+			
+			//objects in the scene 
+			var clock_group = new THREE.Object3D(); //clock face and shell
+			var bigHand = new THREE.Object3D();  //minute hand 
+			var smallHand = new THREE.Object3D(); //hour hand 
+			var bird = new THREE.Object3D();  // bird strikes at hour (or when minute hand is at 12:00)
+			var door_right = new THREE.Object3D(); //doors for animation 
+			var door_left = new THREE.Object3D();  //doors for animation
+			
+			//our dummy object as an axis 
+			var sec_axis; 
+			var min_axis; 
+			var hour_axis; 
+			
+			var geo1; // sec hand 
+			var geo2; //minute hand 
+			var geo3; //hour hand 
+			
+			var mat1; //sec hand 
+			var mat2; //minute hand 
+			var mat3; //hour hand 
+			
+			var secHand;
+			var minHand; 
+			var hourhand; 
+					
+			var hand1Rotation = 0; //minute hand rotation 
+			var hand2Rotation = 0; //hour hand rotation
+			
+			var mouseXOnMouseDown = 0; 
+			var targetRotationX = 0; 
+			var targetRotationOnMouseDownX = 0;  
+			
+			//for picking 
+			var projector = new THREE.Projector(); 
+			var raycaster = new THREE.Raycaster();
+			var intersects = []; 
+
+			//time constants
+			var secondsCount = 0; 
+			var minutesCount = 0;
+			var pivot; 
+			init();
+			render();
+			
+			function init(){
+			
+			scene = new THREE.Scene();
+		    camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+
+			renderer = new THREE.WebGLRenderer();
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+			
+			ambient = new THREE.AmbientLight( 0x101030 );
+			scene.add( ambient );
+			
+			directionalLight = new THREE.DirectionalLight( 0xffeedd );
+			directionalLight.position.set( 0, 1, 1 );
+			scene.add( directionalLight );
+			
+			
+			manager = new THREE.LoadingManager();
+				manager.onProgress = function ( item, loaded, total ) {
+					console.log( item, loaded, total );
+
+				};
+			
+			//scene.add(clock_group); 
+			//model
+			loader = new THREE.OBJMTLLoader(manager);
+			
+			//clock face
+			loader.load('obj/clock-face.obj', 'obj/clock-face.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					//scene.add( object );
+					clock_group.add(object); // object 0 
+					}
+				);
+				
+				//outershell
+				loader.load('obj/clock-shell.obj', 'obj/clock-shell.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					//scene.add( object );
+					
+					clock_group.add(object); //object 1 
+					}
+				);				
+				
+				/*
+				//minute hand 
+				loader.load('obj/bighand.obj', 'obj/bighand.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					//scene.add( object );
+					bigHand.add(object);
+					scene.add(bigHand);
+					}
+				);
+				
+				loader.load('obj/smallhand.obj', 'obj/smallhand.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					smallHand.add(object);
+					scene.add( smallHand  );
+					}
+				);
+				*/
+				
+				loader.load('obj/door1.obj', 'obj/door1.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					door_right.add(object);
+					scene.add( door_right );
+					
+					//clock_group.add(object); //object 4
+					}
+				);
+				
+				
+				loader.load('obj/door2.obj', 'obj/door2.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					door_left.add(object);
+					scene.add( door_left );
+					
+					//clock_group.add(object); //object 5 
+					}
+				);
+
+				loader.load('obj/bird.obj', 'obj/bird.mtl', function ( object ) {
+					object.rotation.y = -90*Math.PI / 180;
+					object.position.z = -1.75;
+					bird.add(object);
+					scene.add( bird );
+					
+					//clock_group.add(object); // object 6
+					}
+				);
+			
+			//building more clock geometry 
+			geo1 = new THREE.BoxGeometry(1,1,1);
+			mat1 = new THREE.MeshBasicMaterial( { color: 0xffffff } );
+			
+			geo2 = new THREE.BoxGeometry(1,1,1);
+			mat2 = new THREE.MeshBasicMaterial({color: 0x000000});
+
+			geo3 = new THREE.BoxGeometry(1,1,1);
+			mat3 = new THREE.MeshBasicMaterial({color: 0x555555}); 
+			
+			//second hand 
+			secHand = new THREE.Mesh( geo1, mat1 );
+					secHand.scale.x = 0.02;
+					//secHand.rotation.z = -0.9;
+					secHand.position.x = 0.1;
+					secHand.position.y = 0.3; 
+
+			sec_axis = new THREE.Object3D(); 
+				sec_axis.scale.y = 0.2;
+				sec_axis.scale.x = 0.1;
+				sec_axis.position.y = 0.11;
+				sec_axis.position.x = 0.07;
+				sec_axis.add(secHand);
+				scene.add(sec_axis);
+
+			//minute hand 	
+			minHand = new THREE.Mesh(geo2, mat2);
+				minHand.scale.x = 0.1; 
+				minHand.position.y = 0.3;
+				scene.add(minHand);
+				
+			min_axis = new THREE.Object3D(); 
+				min_axis.scale.y = 0.8; 
+				min_axis.scale.x = 0.3; 
+				min_axis.position.y = 0.4; 
+				min_axis.position.x = 0.4; 
+				min_axis.add(minHand);
+				scene.add(min_axis);
+				
+			//hour hand 	
+			hourHand = new THREE.Mesh(geo3, mat3);
+				hourHand.scale.x = 0.05; 
+				hourHand.position.x = 0.35; 
+				hourHand.position.y = 0.45; 
+				scene.add(hourHand);
+
+			camera.position.z = 5;
+			scene.add(clock_group); 
+
+			
+			//Load background texture
+			bgTexture = THREE.ImageUtils.loadTexture('brick.jpg');	
+			bgMesh = new THREE.Mesh(
+					new THREE.PlaneBufferGeometry(2,2,0),
+					new THREE.MeshBasicMaterial({
+					map: bgTexture
+					}));
+			bgMesh.material.depthTest = false;
+			bgMesh.material.depthWrite = false; 
+			
+			//Create background scene
+			bgScene = new THREE.Scene(); 
+			bgCamera = new THREE.Camera(); 
+			
+			bgScene.add(bgCamera);
+			bgScene.add(sec_axis);
+			
+			//Picking items 
+			window.addEventListener('mousedown', onDocumentMouseDown); 
+			
+			}
+			
+			//mouse events 
+			function onDocumentMouseDown(e){
+				
+				e.preventDefault();
+				//transform mouse coord to THREE coordinates 
+				
+				//raycaster.setFromCamera(mouse.clone(), camera);
+				//intersects = raycaster.intersectObjects(clock_group.children); 
+				//onmousedown we need to rotate on a specific axis
+				window.addEventListener('mousemove', onDocumentMouseMove, false); 
+				window.addEventListener('mouseup', onDocumentMouseUp, false); 
+				
+				mouseXOnMouseDown = e.clientX - (window.innerWidth/2); 
+				targetRotationOnMouseDownX = targetRotationX; 
+				
+			}
+			
+			function onDocumentMouseMove(e){
+			
+				mouse.x = e.clientX - (window.innerWidth/2); 
+				mouse.y = e.clientY - (window.innerHeight/2); 
+				
+				targetRotationX = targetRotationOnMouseDownX + (mouse.x - mouseXOnMouseDown) * 0.02; 
+			} 
+			
+			function onDocumentMouseUp(e){
+			
+				window.removeEventListener('mousemove', onDocumentMouseMove, false);
+				window.removeEventListener('mouseup', onDocumentMouseUp, false); 
+			} 
+			
+			function makeRotation3DZ(object, theta) {
+				theta = THREE.Math.degToRad(theta); //make sure we're dealing with radians
+                object.rotation.z += theta; // if the object we passed is already rotated
+			}
+				
+				
+			function tick() { 
+
+				var hours = (-1*(new Date().getHours())/24) * (Math.PI * 2); 
+				var minutes = (-1*(new Date().getMinutes())/60 )* (Math.PI * 2); 
+				var seconds = (-1* (new Date().getSeconds()) / 60) * (Math.PI *2); 
+				
+				min_axis.rotation.z = minutes; 
+				sec_axis.rotation.z = seconds;
+				hourHand.rotation.z = hours; 
+				
+				var check = new Date().getMinutes(); 
+				var check2 = new Date().getSeconds(); 
+				//if bigHand @ 12:00
+				//setAnimation(); 
+				if( check == 59 && check2 == 59) {
+					setAnimation();
+				}
+			} 
+			
+			function setAnimation() {
+			
+				//this will be used for the animation at the hour
+				//to do this, check date time then call this function
+				//render animation
+				var doorLeftOrigY = door_left.rotation.y;
+					var doorRightOrigY = door_right.rotation.y;
+					var birdOrigZ = 0.0;
+					if(door_left.rotation.y > -20 && door_right.rotation.y > -20) {
+					// open door
+						door_left.rotation.y -=5;
+						door_right.rotation.y -= 5;
+						bird.position.z += 0.5; //bring bird forward.
+					}
+					//setTimeout acts like a delayed animation we want the bird to stay out there and cuckoo
+					var timeOut = setTimeout(function(){bird.position.z = birdOrigZ; door_left.rotation.y = -90 * Math.PI / 180;
+										  door_right.rotation.y = -90 * Math.PI / 180; hasCuckooed = true;}, 5000);
+										  
+					if(hasCuckooed) {
+						clearTimeout(timeOut); //clearTimeout removes the delayed event hence the assignment above
+					}
+			}
+				
+			
+			//Render Function - this is called like setInterval()
+			function render() {
+				requestAnimationFrame( render );
+				tick(); //clock ticking 
+				
+				renderer.autoClear = false; 
+				renderer.clear();
+				renderer.render(bgScene, bgCamera);
+				renderer.render(scene, camera);
+			};
+			
+		</script>
+	</body>
+</html>
